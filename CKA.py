@@ -146,7 +146,7 @@ def CKAsanity_check_cka(inter_feature, args):
                 for k in range(layer_num):
                     sim_of_layers = []
                     for l in range(layer_num):
-                        sim_of_layers.append(linear_HSIC(inter_feature[i][k], inter_feature[j][l]))
+                        sim_of_layers.append(linear_CKA(inter_feature[i][k], inter_feature[j][l]))
                     found_layer = sim_of_layers.index(max(sim_of_layers))
                     if found_layer == current_layer:
                         correct_cnt +=1
