@@ -1,0 +1,29 @@
+# Architecture
+arch: CNN_10
+
+# ===== Dataset ===== #
+data: ./dataset
+set: CIFAR10
+name: CNN_10
+
+# ===== Learning Rate Policy ======== #
+optimizer: sgd
+lr: 0.1
+lr_policy: cosine_lr
+
+# ===== Network training config ===== #
+epochs: 100
+weight_decay: 0.0005
+momentum: 0.9
+batch_size: 200
+
+# ===== Sparsity =========== #
+
+init: kaiming_normal
+
+mode: fan_in
+nonlinearity: relu
+prune_rate: 0.0
+
+# ===== Hardware setup ===== #
+workers: 0 #4
