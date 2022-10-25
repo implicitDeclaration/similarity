@@ -7,6 +7,32 @@ import math
 import torch
 import torch.nn as nn
 
+vgg_layers = {
+    'cvgg11_bn': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'cvgg13_bn': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'cvgg16_bn': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
+    'cvgg19_bn': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
+}
+
+
+def get_fl_index(arch, layer_index):
+    '''
+
+    :param arch: model arch, e.g., VGG16
+    :param layer_index: layer index, e.g., the first convolutional layer is 1
+    :return: layer and feature list index
+    '''
+    cfg = vgg_layers[arch]
+    layer_num = -1
+    conv_num = -1
+    for i in range(layer_index):
+        if isinstance (cfg[i],int):
+            layer_num += 3
+            conv_num += 1
+        else:
+            layer_num += 1
+    return conv_num, layer_num
+
 
 def save_checkpoint(state, is_best, filename="checkpoint.pth", save=False):
     filename = pathlib.Path(filename)

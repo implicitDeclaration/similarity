@@ -88,8 +88,8 @@ class Builder(object):
         if args.init == "signed_constant":
 
             fan = nn.init._calculate_correct_fan(conv.weight, args.mode)
-            if args.scale_fan:
-                fan = fan * (1 - args.prune_rate)
+            # if args.scale_fan:
+            #     fan = fan * (1 - args.prune_rate)
             gain = nn.init.calculate_gain(args.nonlinearity)
             std = gain / math.sqrt(fan)
             conv.weight.data = conv.weight.data.sign() * std
@@ -97,8 +97,8 @@ class Builder(object):
         elif args.init == "unsigned_constant":
 
             fan = nn.init._calculate_correct_fan(conv.weight, args.mode)
-            if args.scale_fan:
-                fan = fan * (1 - args.prune_rate)
+            # if args.scale_fan:
+            #     fan = fan * (1 - args.prune_rate)
 
             gain = nn.init.calculate_gain(args.nonlinearity)
             std = gain / math.sqrt(fan)
@@ -106,17 +106,17 @@ class Builder(object):
 
         elif args.init == "kaiming_normal":
 
-            if args.scale_fan:
-                fan = nn.init._calculate_correct_fan(conv.weight, args.mode)
-                fan = fan * (1 - args.prune_rate)
-                gain = nn.init.calculate_gain(args.nonlinearity)
-                std = gain / math.sqrt(fan)
-                with torch.no_grad():
-                    conv.weight.data.normal_(0, std)
-            else:
-                nn.init.kaiming_normal_(
-                    conv.weight, mode=args.mode, nonlinearity=args.nonlinearity
-                )
+            # if args.scale_fan:
+            #     fan = nn.init._calculate_correct_fan(conv.weight, args.mode)
+            #     fan = fan * (1 - args.prune_rate)
+            #     gain = nn.init.calculate_gain(args.nonlinearity)
+            #     std = gain / math.sqrt(fan)
+            #     with torch.no_grad():
+            #         conv.weight.data.normal_(0, std)
+            # else:
+            nn.init.kaiming_normal_(
+                conv.weight, mode=args.mode, nonlinearity=args.nonlinearity
+            )
 
         elif args.init == "kaiming_uniform":
             nn.init.kaiming_uniform_(

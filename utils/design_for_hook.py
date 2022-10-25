@@ -2,11 +2,11 @@
 # from model.VGG_ImageNet import *
 
 cfgs = {
-    'cres18': [2, 2, 2, 2],
-    'cres34': [3, 4, 6, 3],
-    'cres50': [3, 4, 6, 3],
-    'cres101': [3, 4, 23, 3],
-    'cres152': [3, 8, 36, 3],
+    'cresnet18': [2, 2, 2, 2],
+    'cresnet34': [3, 4, 6, 3],
+    'cresnet50': [3, 4, 6, 3],
+    'cresnet101': [3, 4, 23, 3],
+    'cresnet152': [3, 8, 36, 3],
     'ires18': [2, 2, 2, 2],
     'ires34': [3, 4, 6, 3],
     'ires50': [3, 4, 6, 3],
@@ -48,7 +48,7 @@ def get_inner_feature_for_cnn(model, hook):
 
 
 def get_inner_feature_for_resnet(model, hook, arch):
-    cfg = cfgs[arch]
+    cfg = cfgs[arch.lower()]
     print('cfg:', cfg)
     handle = model.conv1.register_forward_hook(hook)
     # handle.remove()  # free memory
@@ -66,7 +66,7 @@ def get_inner_feature_for_resnet(model, hook, arch):
 
 
 def get_inner_feature_for_vgg(model, hook, arch):
-    cfg = cfgs[arch]
+    cfg = cfgs[arch.lower()]
     print('cfg:', cfg)
     count = 0
     for idx, m in enumerate(model.named_modules()):

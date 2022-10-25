@@ -11,7 +11,7 @@ import seaborn as sns
 from sklearn.metrics.pairwise import cosine_similarity
 import data
 from train import get_trainer, get_dataset, get_model, set_gpu
-from motifs import ESU_BFS
+from metric.motifs import ESU_BFS
 
 cfgs = {
 'cresnet18': [2, 2, 2, 2],
@@ -78,6 +78,9 @@ def calculate_cosine_similarity_matrix(h_emb, topk, eps=1e-8):
     '''
     # normalize
     edges_list = []
+
+    h_emb = torch.tensor(h_emb)
+    batch_size = h_emb.size(0)
     a_n = h_emb.norm(dim=1).unsqueeze(1)
     a_norm = h_emb / torch.max(a_n, eps * torch.ones_like(a_n))
 
@@ -94,6 +97,7 @@ def calculate_cosine_similarity_matrix(h_emb, topk, eps=1e-8):
             b = int(k_indice[j]+1)
             a = (int(i+1), b, float(sim_matrix[i][k_indice[j]]))
             edges_list.append(a)
+    sim_matrix = nx.from_numpy_matrix(sim_matrix)
     return sim_matrix, edges_list
 
 
@@ -124,7 +128,6 @@ def LSim(G1, G2):
 
 def get_graphs(args, adj=False):
     model_graphs = []
-    whole_label = torch.rand(500, 1)
     if 'vgg' in args.arch.lower():
         my_seeds = [23, 24, 26, 257, 277, 287, 298, 300, 31, 32]
         model_size = 13

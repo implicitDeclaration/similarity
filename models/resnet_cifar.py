@@ -80,10 +80,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d(1)
 
-        if args.last_layer_dense:
-            self.fc = nn.Conv2d(512 * block.expansion, 10, 1)
-        else:
-            self.fc = builder.conv1x1(512 * block.expansion, 10)
+        self.fc = builder.conv1x1(512 * block.expansion, 10)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)

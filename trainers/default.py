@@ -1,12 +1,14 @@
 import time
 import torch
 import tqdm
+import numpy as np
 
+from models.VGG_cifar import ConvStitch
 from utils.eval_utils import accuracy
 from utils.logging import AverageMeter, ProgressMeter
+from utils.design_for_hook import get_inner_feature_for_vgg
 
-
-__all__ = ["train", "validate", ""]
+__all__ = ["train", "validate", "train_stitch", "validate_stitch"]
 
 
 def train(train_loader, model, criterion, optimizer, epoch, args, writer):
@@ -39,9 +41,9 @@ def train(train_loader, model, criterion, optimizer, epoch, args, writer):
         data_time.update(time.time() - end)
 
         if args.gpu is not None:
-            images = images.cuda(args.gpu, non_blocking=True)
-
-        target = target.cuda(args.gpu, non_blocking=True)
+            device = 'cuda:%s' % args.gpu
+            images = images.to(device)
+            target = target.to(device)
 
         # compute output
         if args.stitch:
@@ -93,9 +95,12 @@ def validate(val_loader, model, criterion, args, writer, epoch):
             enumerate(val_loader), ascii=True, total=len(val_loader)
         ):
             if args.gpu is not None:
-                images = images.cuda(args.gpu, non_blocking=True)
-
-            target = target.cuda(args.gpu, non_blocking=True)
+                device = 'cuda:%s' % args.gpu
+                images = images.to(device)
+                target = target.to(device)
+                #
+                # images = images.cuda(args.gpu, non_blocking=True)
+                # target = target.cuda(args.gpu, non_blocking=True)
 
             # compute output
             output = model(images)
@@ -121,4 +126,64 @@ def validate(val_loader, model, criterion, args, writer, epoch):
             progress.write_to_tensorboard(writer, prefix="test", global_step=epoch)
 
     return top1.avg, top5.avg
+
+
+def train_stitch(botm_model, top_model, stitch_model, train_loader, epoch, fea_ind, layer_ind, device):
+    botm_model.eval()
+    top_model.train()
+    bottom_feature = []
+
+    def hook(module, input, output):
+        bottom_feature.append(output.clone().detach())
+    get_inner_feature_for_vgg(botm_model, hook, arch='cvgg16_bn')  # get inner feature of the bottom model
+
+    # stitch_model = ConvStitch(512, 512)
+    stitch_model.to(device)
+    optimizer = torch.optim.Adam(stitch_model.parameters(), lr=0.001)
+    criterion = torch.nn.CrossEntropyLoss().cuda()
+    acc1_rec, acc5_rec = [], []
+
+    for images, targets in train_loader:
+
+        images, targets = images.to(device), targets.long().to(device)
+        botm_output = botm_model(images)
+        feature = stitch_model(bottom_feature[fea_ind])
+       # print(bottom_feature[2].shape)
+        top_output = top_model(feature, mid_input=layer_ind)
+
+        loss = criterion(top_output, targets)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        acc1, acc5 = accuracy(top_output, targets, topk=(1, 5))
+        acc1_rec.append(acc1)
+        acc5_rec.append(acc5)
+        bottom_feature = []  # clear features
+    return np.mean(acc1_rec), np.mean(acc5_rec)
+        #print('epoch : {}, top1 train acc : {}， top5 train acc : {}'.format(epoch, acc1, acc5))
+
+
+def validate_stitch(botm_model, top_model, stitch_model, test_loader, fea_ind, layer_ind, device):
+    botm_model.eval()
+    top_model.eval()
+    stitch_model.eval()
+    bottom_feature = []
+    def hook(module, input, output):
+        bottom_feature.append(output.clone())
+
+    get_inner_feature_for_vgg(botm_model, hook, arch='cvgg16_bn')  # get inner feature of the bottom model
+
+    acc1_rec, acc5_rec = [], []
+    for images, targets in test_loader:
+        images, targets = images.to(device), targets.to(device)
+        botm_output = botm_model(images)
+        feature = stitch_model(bottom_feature[fea_ind])
+        top_output = top_model(feature, mid_input=layer_ind)
+        acc1, acc5 = accuracy(top_output, targets, topk=(1, 5))
+        acc1_rec.append(acc1)
+        acc5_rec.append(acc5)
+        bottom_feature = []  # clear features
+
+    return np.mean(acc1_rec), np.mean(acc5_rec)
+    #print("overall accuracy is {}".format(np.mean(acc_all)))
 

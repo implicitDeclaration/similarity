@@ -22,8 +22,9 @@ def sanity_check(args):
     for seed in my_seeds:
         args.pretrained = './runs/{}/seed{}/prune_rate=0.0/checkpoints/model_best.pth'.format(args.arch, seed)
         model = get_pretrained(args, model)
+        args.seed = seed
         get_edge(model, data, args)
-    if args.metric is 'cka':
+    if args.metric == 'cka':
         features = get_features(args)
     else:
         features = get_graphs(args)
@@ -42,7 +43,7 @@ def sanity_check_acc(model_graphs):
             for layer_i in model_graphs[i]:
                 sim_of_layers = []
                 for layer_j in model_graphs[j]:
-                    if args.metric is 'cka':
+                    if args.metric == 'cka':
                         sim_of_layers.append(linear_CKA(layer_i, layer_j))
                     else:
                         sim_of_layers.append(LSim(layer_i, layer_j))
@@ -81,7 +82,7 @@ def get_edge(model, data, args):
 
             for m in range(len(inter_feature)):
                 if len(inter_feature[m].shape) != 2:
-                    if args.metric is 'cka':
+                    if args.metric == 'cka':
                         inter_feature[m] = np.mean(inter_feature[m].cpu().numpy(), axis=(2, 3))
                     else:
                         inter_feature[m] = inter_feature[m].reshape(args.batch_size, -1)
@@ -89,7 +90,7 @@ def get_edge(model, data, args):
                 file_check = os.path.join(args.feature_save, "{arch}-{layer}-sd{seed}-N{de}_{metric}.npy".format(
                      arch=args.arch, layer=m, seed=args.seed, de=args.batch_size, metric=args.metric))
 
-                np.save(file_check, inter_feature[m])
+                np.save(file_check, inter_feature[m].cpu().detach().numpy())
                 print(file_check + " saved !")
         break  # one batch is enough
 

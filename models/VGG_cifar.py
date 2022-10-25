@@ -1,8 +1,19 @@
 import math
 import torch.nn as nn
-
+import torch.nn.functional as F
 
 __all__ = ['VGG', 'cvgg11_bn', 'cvgg13_bn', 'cvgg16_bn', 'cvgg19_bn']
+
+
+class ConvStitch(nn.Module):
+    def __init__(self, input_channel, output_channel):
+        super(ConvStitch, self).__init__()
+        self.stitch_layer = nn.Conv2d(input_channel, output_channel, kernel_size=1, stride=1)
+
+    def forward(self, x):
+        y = self.stitch_layer(x)
+        y = F.relu(y)
+        return y
 
 
 class VGG(nn.Module):

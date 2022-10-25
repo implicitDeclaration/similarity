@@ -14,6 +14,7 @@ import torch.utils.data.distributed
 
 from utils.logging import AverageMeter, ProgressMeter
 from utils.net_utils import (
+    get_fl_index,
     save_checkpoint,
     get_lr,
     LabelSmoothing,
@@ -39,12 +40,14 @@ def main():
 
 def main_worker(args):
     args.gpu = None
-    train, validate, modifier = get_trainer(args)
+    train, validate = get_trainer(args)
 
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
-
-    model = get_model(args)
+    if args.stitch:
+        top_model, botm_model, model = get_model(args)
+    else:
+        model = get_model(args)
     model = set_gpu(args, model)
     if args.pretrained:
         model = get_pretrained(args, model)
@@ -73,24 +76,33 @@ def main_worker(args):
     )
 
     end_epoch = time.time()
-    acc1, best_acc1 = None, None
+    acc1, best_acc1 = None, 0
+
+    device = 'cuda:%s' % args.gpu
 
     for epoch in range(args.epochs):
         lr_policy(epoch, iteration=None)
-        modifier(args, epoch, model)
 
         cur_lr = get_lr(optimizer)
 
         # train for one epoch
         start_train = time.time()
-        train_acc1, train_acc5 = train(
-            data.train_loader, model, criterion, optimizer, epoch, args, writer=writer
-        )
+        if args.stitch:
+            fea_ind, layer_ind = get_fl_index(args.arch, 17)
+            train_acc1, train_acc5 = train(top_model, botm_model, model, data.train_loader,
+                                           epoch, fea_ind, layer_ind, device)
+        else:
+            train_acc1, train_acc5 = train(
+                data.train_loader, model, criterion, optimizer, epoch, args, writer=writer
+            )
         train_time.update((time.time() - start_train) / 60)
 
         # evaluate on validation set
         start_validation = time.time()
-        acc1, acc5 = validate(data.val_loader, model, criterion, args, writer, epoch)
+        if args.stitch:
+            acc1, acc5 = validate(botm_model, top_model, model, data.val_loader, fea_ind, layer_ind, device)
+        else:
+            acc1, acc5 = validate(data.val_loader, model, criterion, args, writer, epoch)
         validation_time.update((time.time() - start_validation) / 60)
 
         # remember best acc@1 and save checkpoint
@@ -115,28 +127,13 @@ def main_worker(args):
         end_epoch = time.time()
 
 
-def stitch_train():
-    train, validate, modifier = get_trainer(args)
-    if args.gpu is not None:
-        print("Use GPU: {} for training".format(args.gpu))
-
-    top_model, botm_model = get_model(args)
-    botm_model = load_pretrained(args.botm_weight, botm_model)
-    top_model = load_pretrained_stitch(args.top_weight, top_model)
-    # our stitch layer is defined in the top model
-    top_model, botm_model = set_gpu(args, top_model), set_gpu(args, botm_model)
-
-    data = get_dataset(args)
-    criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = get_optimizer(args, top_model)
-    lr_policy = get_policy(args.lr_policy)(optimizer, args)
-
-
 def get_trainer(args):
     print(f"=> Using trainer from trainers.{args.trainer}")
     trainer = importlib.import_module(f"trainers.{args.trainer}")
-
-    return trainer.train, trainer.validate, trainer.modifier
+    if args.stitch:
+        return trainer.train_stitch, trainer.validate_stitch
+    else:
+        return trainer.train, trainer.validate
 
 
 def get_directories(args):
@@ -187,9 +184,14 @@ def get_model(args):
         model = models.__dict__[args.arch]()
 
     if args.stitch:
-        top_model = models.__dict__[args.top](num_classes=10)
-        botm_model = models.__dict__[args.botm]()
-        return top_model, botm_model
+        top_pretrained = torch.load(args.top)
+        botm_pretrained = torch.load(args.botm)
+        top_model = models.__dict__[args.arch](num_classes=10)
+        botm_model = models.__dict__[args.arch](num_classes=10)
+        stitch_model = models.__dict__['ConvStitch'](512, 512)
+        top_model.load_state_dict(top_pretrained)
+        botm_model.load_state_dict(botm_pretrained)
+        return top_model, botm_model, stitch_model
 
     return model
 
@@ -220,19 +222,21 @@ def get_pretrained(args, model):
         print("=> loading pretrained weights from '{}'".format(args.pretrained))
         pretrained = torch.load(
             args.pretrained,
-            map_location=torch.device("cuda:{}".format(args.multigpu[0])),
-        )
+            map_location=torch.device("cuda:{}".format(args.gpu)),
+        )['state_dict'] # !!!
 
+        load_weight = {}
         model_state_dict = model.state_dict()
         for k, v in pretrained.items():
+            if 'module.' in k:  # in case that model trained on multi-gpu
+                k = k.replace('module.', '')
+
             if v.size() != model_state_dict[k].size():  # k not in model_state_dict or
                 print("IGNORE:", k)
-        pretrained = {
-            k: v
-            for k, v in pretrained.items()
-            if (v.size() == model_state_dict[k].size()) # k in model_state_dict and
-        }
-        model_state_dict.update(pretrained)
+                continue
+            load_weight[k] = v
+
+        model_state_dict.update(load_weight)
         model.load_state_dict(model_state_dict)
     else:
         print("=> no pretrained weights found at '{}'".format(args.pretrained))
@@ -263,7 +267,7 @@ def get_optimizer(args, model):
             [
                 {
                     "params": bn_params,
-                    "weight_decay": 0 if args.no_bn_decay else args.weight_decay,
+                    "weight_decay": args.weight_decay,
                 },
                 {"params": rest_params, "weight_decay": args.weight_decay},
             ],

@@ -15,6 +15,9 @@ def parse_arguments():
         "--data", help="path to dataset base directory", default="/mnt/disk1/datasets"
     )
     parser.add_argument(
+        "--syndata", help="path to synthetic dataset file"
+    )
+    parser.add_argument(
         "--save", help="path to save ablation log", default="./"
     )
     parser.add_argument(
@@ -26,22 +29,16 @@ def parse_arguments():
     parser.add_argument("--optimizer", help="Which optimizer to use", default="sgd")
     parser.add_argument("--set", help="name of dataset", type=str, default="ImageNet")
     parser.add_argument(
-        "-a", "--arch", metavar="ARCH", default="ResNet18", help="model architecture"
+        "-a", "--arch", metavar="ARCH", default="cvgg16_bn", help="model architecture"
     )
     parser.add_argument(
-        "--stitch", default=False, help="if train a stitch layer"
+        "--stitch", action='store_true', help="if train a stitch layer"
     )
     parser.add_argument(
-        "--top", default="ResNet18_stitch", help="if train a stitch layer"
+        "--top", default=None, help="top model weight file"
     )
     parser.add_argument(
-        "--botm", default="ResNet18", help="if train a stitch layer"
-    )
-    parser.add_argument(
-        "--top_weight", help="if train a stitch layer"
-    )
-    parser.add_argument(
-        "--botm_weight", help="if train a stitch layer"
+        "--botm", default=None, help="botm model weight file"
     )
 
     parser.add_argument(
@@ -189,7 +186,7 @@ def parse_arguments():
     )
 
     parser.add_argument(
-        "--trainer", type=str, default="default", help="cs, ss, or standard training"
+        "--trainer", type=str, default="default", help="use which trainer file, all is defined in the default.py file"
     )
 
 
