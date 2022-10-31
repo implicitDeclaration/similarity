@@ -39,7 +39,7 @@ def main():
 
 
 def main_worker(args):
-    args.gpu = None
+
     train, validate = get_trainer(args)
 
     if args.gpu is not None:
@@ -48,7 +48,7 @@ def main_worker(args):
         top_model, botm_model, model = get_model(args)
     else:
         model = get_model(args)
-    model = set_gpu(args, model)
+    set_gpu(args, model)
     if args.pretrained:
         model = get_pretrained(args, model)
     data = get_dataset(args)
@@ -84,13 +84,12 @@ def main_worker(args):
         lr_policy(epoch, iteration=None)
 
         cur_lr = get_lr(optimizer)
-
         # train for one epoch
         start_train = time.time()
         if args.stitch:
-            fea_ind, layer_ind = get_fl_index(args.arch, 17)
-            train_acc1, train_acc5 = train(top_model, botm_model, model, data.train_loader,
-                                           epoch, fea_ind, layer_ind, device)
+            fea_ind, layer_ind = get_fl_index(args.arch, args.stitch_loc)
+            train_acc1, train_acc5 = train(botm_model, top_model, model, data.train_loader,
+                                           args, fea_ind, layer_ind, epoch, device)
         else:
             train_acc1, train_acc5 = train(
                 data.train_loader, model, criterion, optimizer, epoch, args, writer=writer
@@ -100,7 +99,8 @@ def main_worker(args):
         # evaluate on validation set
         start_validation = time.time()
         if args.stitch:
-            acc1, acc5 = validate(botm_model, top_model, model, data.val_loader, fea_ind, layer_ind, device)
+            fea_ind, layer_ind = get_fl_index(args.arch, args.stitch_loc)
+            acc1, acc5 = validate(botm_model, top_model, model, data.val_loader, args, fea_ind, layer_ind, device)
         else:
             acc1, acc5 = validate(data.val_loader, model, criterion, args, writer, epoch)
         validation_time.update((time.time() - start_validation) / 60)
@@ -112,7 +112,7 @@ def main_worker(args):
         save = ((epoch % args.save_every) == 0) and args.save_every > 0
         if is_best or save or epoch == args.epochs - 1:
             if is_best:
-                print(f"==> New best, saving at {ckpt_base_dir / 'model_best.pth'}")
+                print(f"==> New best {best_acc1}, saving at {ckpt_base_dir / 'model_best.pth'}")
 
             save_checkpoint(
                 model.state_dict(), is_best, filename=ckpt_base_dir / f"epoch_{epoch}.state", save=save,)
@@ -122,7 +122,6 @@ def main_worker(args):
         progress_overall.write_to_tensorboard(
             writer, prefix="diagnostics", global_step=epoch
         )
-
         writer.add_scalar("test/lr", cur_lr, epoch)
         end_epoch = time.time()
 
@@ -178,19 +177,22 @@ def _run_dir_exists(run_base_dir):
 
 def get_model(args):
     print("=> Creating model '{}'".format(args.arch))
-    if 'vgg' in args.arch:
-        model = models.__dict__[args.arch](num_classes=10)
-    else:
-        model = models.__dict__[args.arch]()
+    model = models.__dict__[args.arch](num_classes=10)
 
     if args.stitch:
-        top_pretrained = torch.load(args.top)
+        top_pretrained = torch.load(args.top)['state_dict'] # ***!!!
         botm_pretrained = torch.load(args.botm)
         top_model = models.__dict__[args.arch](num_classes=10)
         botm_model = models.__dict__[args.arch](num_classes=10)
-        stitch_model = models.__dict__['ConvStitch'](512, 512)
+        stitch_model = models.__dict__['ConvStitch'](args.stitch_ch, args.stitch_ch)
+
         top_model.load_state_dict(top_pretrained)
         botm_model.load_state_dict(botm_pretrained)
+        if os.path.isfile(args.stitch_model):
+            stitch_model.load_state_dict(args.stitch_model)
+        set_gpu(args, botm_model)
+        set_gpu(args, top_model)
+        # set_gpu(args, stitch_model)
         return top_model, botm_model, stitch_model
 
     return model
@@ -223,7 +225,7 @@ def get_pretrained(args, model):
         pretrained = torch.load(
             args.pretrained,
             map_location=torch.device("cuda:{}".format(args.gpu)),
-        )['state_dict'] # !!!
+        )# ['state_dict']
 
         load_weight = {}
         model_state_dict = model.state_dict()
@@ -235,7 +237,6 @@ def get_pretrained(args, model):
                 print("IGNORE:", k)
                 continue
             load_weight[k] = v
-
         model_state_dict.update(load_weight)
         model.load_state_dict(model_state_dict)
     else:

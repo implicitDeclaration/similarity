@@ -14,24 +14,39 @@ vgg_layers = {
     'cvgg19_bn': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
 }
 
+res_blocks = {
+    'cresnet18': [2, 2, 2, 2],
+    'cresnet34': [3, 4, 6, 3],
+    'cresnet50': [3, 4, 6, 3],
+    'cresnet101': [3, 4, 23, 3],
+    'cresnet152': [3, 8, 36, 3],}
 
 def get_fl_index(arch, layer_index):
     '''
-
+    given the target convolution layer index, return the feature list index and actual layer index in the model
     :param arch: model arch, e.g., VGG16
     :param layer_index: layer index, e.g., the first convolutional layer is 1
     :return: layer and feature list index
     '''
-    cfg = vgg_layers[arch]
-    layer_num = -1
-    conv_num = -1
-    for i in range(layer_index):
-        if isinstance (cfg[i],int):
-            layer_num += 3
-            conv_num += 1
-        else:
-            layer_num += 1
-    return conv_num, layer_num
+    if 'vgg' in arch.lower():
+        cfg = vgg_layers[arch.lower()]
+        layer_num = -1
+        conv_num = -1
+        for i in range(layer_index):
+            if isinstance(cfg[i],int):
+                layer_num += 3
+                conv_num += 1
+            else:
+                layer_num += 1
+        return conv_num, layer_num
+    elif 'res' in arch.lower():
+        cfg = res_blocks[arch.lower()]
+        layer_num = layer_index + 1
+        conv_num = - 1
+        for i in range(layer_index):
+            conv_num += cfg[i]
+
+        return conv_num, layer_num
 
 
 def save_checkpoint(state, is_best, filename="checkpoint.pth", save=False):

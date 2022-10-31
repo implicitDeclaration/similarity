@@ -17,34 +17,75 @@ class ConvStitch(nn.Module):
 
 
 class VGG(nn.Module):
-    '''
-    VGG model
-    '''
-    def __init__(self, features, num_classes=10):
+    def __init__(self, vgg_name):
         super(VGG, self).__init__()
-        self.features = features
-        self.classifier = nn.Sequential(
-            nn.Dropout(),
-            nn.Linear(512, 512),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(512, 512),
-            nn.ReLU(True),
-            nn.Linear(512, num_classes),
-        )
-         # Initialize weights
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-                m.bias.data.zero_()
+        self.features = self._make_layers(cfg[vgg_name])
+        self.classifier = nn.Linear(512, 10)
 
+    def forward(self, x, mid_input=False, mid_output=False):
+        if not mid_input:
+            if mid_output:
+                assert not (mid_input and mid_output)
+                for i in range(mid_output + 1):
+                    x = self.features[i](x)
+                return x
+            out = self.features(x)
+            out = out.view(out.size(0), -1)
+            out = self.classifier(out)
+            return out
+        else:
+            for i in range(len(self.features)):
+                if i < mid_input:
+                    continue
+                else:
+                    x = self.features[i](x)
+            x = x.view(x.size(0), -1)
+            out = self.classifier(x)
+            return out
 
-    def forward(self, x):
-        x = self.features(x)
-        x = x.view(x.size(0), -1)
-        x = self.classifier(x)
-        return x
+    def _make_layers(self, cfg):
+        layers = []
+        in_channels = 3
+        for x in cfg:
+            if x == 'M':
+                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+            else:
+                layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1),
+                           nn.BatchNorm2d(x),
+                           nn.ReLU(inplace=True)]
+                in_channels = x
+        # layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
+        return nn.Sequential(*layers)
+#
+# class VGG(nn.Module):
+#     '''
+#     VGG model
+#     '''
+#     def __init__(self, features, num_classes=10):
+#         super(VGG, self).__init__()
+#         self.features = features
+#         self.classifier = nn.Sequential(
+#             nn.Dropout(),
+#             nn.Linear(512, 512),
+#             nn.ReLU(True),
+#             nn.Dropout(),
+#             nn.Linear(512, 512),
+#             nn.ReLU(True),
+#             nn.Linear(512, num_classes),
+#         )
+#          # Initialize weights
+#         for m in self.modules():
+#             if isinstance(m, nn.Conv2d):
+#                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+#                 m.weight.data.normal_(0, math.sqrt(2. / n))
+#                 m.bias.data.zero_()
+#
+#
+#     def forward(self, x):
+#         x = self.features(x)
+#         x = x.view(x.size(0), -1)
+#         x = self.classifier(x)
+#         return x
 
 
 def make_layers(cfg, batch_norm=False):

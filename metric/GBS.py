@@ -5,9 +5,9 @@ import numpy as np
 import torch.nn as nn
 import networkx as nx
 import heapq
-from scipy.stats import stats
-import matplotlib.pyplot as plt
-import seaborn as sns
+# from scipy.stats import stats
+# import matplotlib.pyplot as plt
+# import seaborn as sns
 from sklearn.metrics.pairwise import cosine_similarity
 import data
 from train import get_trainer, get_dataset, get_model, set_gpu

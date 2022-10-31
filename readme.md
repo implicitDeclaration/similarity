@@ -18,18 +18,18 @@ sh train_multi_seeds.sh
 ```
 Then, e.g., run sanity check for ResNet models, use
 ```bash
-python sanity_check.py --config ./configs/resnet18.yaml 
+python sanity_check.py --config ./configs/resnet18.yaml --topk 500 --batch-size 500 
 ```
 ## Model Stitching and Motif Experiment
 To train stitch models, run
 ```bash
-python train.py --stitch --top 'top model weight file path' --botm 'bottom model weight file path' --config 'config file' --gpu 0 --name 'the name of save dir'
+python train.py --stitch --stitch_ch 256 --stitch_loc 3 --top <top model weight file path> --botm <bottom model weight file path> --config <config file> --gpu 0 --name <the name of save dir> --seed 2023 
 ```
-e.g., --top './runs/cvgg16_bn/seed23/prune_rate=0.0/checkpoints/model_best.pth'
+e.g., --top './runs/resnet18/seed23/prune_rate=0.0/checkpoints/model_best.pth'
 
-To run motif experiment, run
+To calculate the motif of a layer, run
 ```bash
-python functional_sim.py 
+python python functional_sim.py --gpu 0 --pretrained <you model file> --batch-size 500 --topk 5 --config configs/resnet18.yaml
 ```
 
 

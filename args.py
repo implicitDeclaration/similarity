@@ -35,6 +35,15 @@ def parse_arguments():
         "--stitch", action='store_true', help="if train a stitch layer"
     )
     parser.add_argument(
+        "--stitch_ch", type=int, help="channel num of stitch layer, need to match the layer you choose"
+    )
+    parser.add_argument(
+        "--stitch_loc", type=int, help="the layer or block to stitch"
+    )
+    parser.add_argument(
+        "--stitch_model", type=int, help="the weight path of stitch model"
+    )
+    parser.add_argument(
         "--top", default=None, help="top model weight file"
     )
     parser.add_argument(

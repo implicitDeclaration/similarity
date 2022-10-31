@@ -21,7 +21,6 @@ class TensorDataset(Dataset):
         return self.len
 
 
-
 class SynCIFAR10():
     def __init__(self, args):
         super(SynCIFAR10, self).__init__()

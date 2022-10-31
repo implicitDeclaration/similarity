@@ -6,7 +6,7 @@ import numpy as np
 from models.VGG_cifar import ConvStitch
 from utils.eval_utils import accuracy
 from utils.logging import AverageMeter, ProgressMeter
-from utils.design_for_hook import get_inner_feature_for_vgg
+from utils.design_for_hook import *
 
 __all__ = ["train", "validate", "train_stitch", "validate_stitch"]
 
@@ -24,12 +24,8 @@ def train(train_loader, model, criterion, optimizer, epoch, args, writer):
     )
 
     # switch to train mode
-    if args.stitch:
-        botm_model, top_model = model[0], model[1]
-        botm_model.eval()
-        top_model.train()
-    else:
-        model.train()
+
+    model.train()
 
     batch_size = train_loader.batch_size
     num_batches = len(train_loader)
@@ -46,11 +42,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args, writer):
             target = target.to(device)
 
         # compute output
-        if args.stitch:
-            mid_output = botm_model(images)
-            output, _, _ = top_model(mid_output)
-        else:
-            output = model(images)
+        output = model(images)
 
         loss = criterion(output, target)
 
@@ -128,62 +120,78 @@ def validate(val_loader, model, criterion, args, writer, epoch):
     return top1.avg, top5.avg
 
 
-def train_stitch(botm_model, top_model, stitch_model, train_loader, epoch, fea_ind, layer_ind, device):
+def train_stitch(botm_model, top_model, stitch_model, train_loader, args, fea_ind, layer_ind, epoch, device):
     botm_model.eval()
     top_model.train()
-    bottom_feature = []
+    # bottom_feature = []
+    #
+    # def hook(module, input, output):
+    #     bottom_feature.append(output.detach())
+    #
+    # if args.arch == 'cvgg16_bn':
+    #     get_inner_feature_for_vgg(botm_model, hook, arch='cvgg16_bn')  # get inner feature of the bottom model
+    # elif args.arch == 'cResNet18':
+    #     get_inner_feature_for_resnet(botm_model, hook, arch='cResNet18')
 
-    def hook(module, input, output):
-        bottom_feature.append(output.clone().detach())
-    get_inner_feature_for_vgg(botm_model, hook, arch='cvgg16_bn')  # get inner feature of the bottom model
-
-    # stitch_model = ConvStitch(512, 512)
-    stitch_model.to(device)
     optimizer = torch.optim.Adam(stitch_model.parameters(), lr=0.001)
     criterion = torch.nn.CrossEntropyLoss().cuda()
     acc1_rec, acc5_rec = [], []
-
-    for images, targets in train_loader:
-
+    loop = tqdm.tqdm(enumerate(train_loader), ascii=True, total=len(train_loader))
+    for i, (images, targets) in loop:
         images, targets = images.to(device), targets.long().to(device)
-        botm_output = botm_model(images)
-        feature = stitch_model(bottom_feature[fea_ind])
-       # print(bottom_feature[2].shape)
-        top_output = top_model(feature, mid_input=layer_ind)
+        # with torch.no_grad():
+        #     botm_output = botm_model(images)
+        # feature = stitch_model(bottom_feature[fea_ind])
 
+        # >><<
+        botm_feature = botm_model(images, mid_output=layer_ind)
+        feature = stitch_model(botm_feature)
+        # <<>>
+        top_output = top_model(feature, mid_input=layer_ind)
         loss = criterion(top_output, targets)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         acc1, acc5 = accuracy(top_output, targets, topk=(1, 5))
-        acc1_rec.append(acc1)
-        acc5_rec.append(acc5)
-        bottom_feature = []  # clear features
-    return np.mean(acc1_rec), np.mean(acc5_rec)
-        #print('epoch : {}, top1 train acc : {}， top5 train acc : {}'.format(epoch, acc1, acc5))
-
-
-def validate_stitch(botm_model, top_model, stitch_model, test_loader, fea_ind, layer_ind, device):
-    botm_model.eval()
-    top_model.eval()
-    stitch_model.eval()
-    bottom_feature = []
-    def hook(module, input, output):
-        bottom_feature.append(output.clone())
-
-    get_inner_feature_for_vgg(botm_model, hook, arch='cvgg16_bn')  # get inner feature of the bottom model
-
-    acc1_rec, acc5_rec = [], []
-    for images, targets in test_loader:
-        images, targets = images.to(device), targets.to(device)
-        botm_output = botm_model(images)
-        feature = stitch_model(bottom_feature[fea_ind])
-        top_output = top_model(feature, mid_input=layer_ind)
-        acc1, acc5 = accuracy(top_output, targets, topk=(1, 5))
-        acc1_rec.append(acc1)
-        acc5_rec.append(acc5)
-        bottom_feature = []  # clear features
+        acc1_rec.append(acc1.cpu().detach().numpy())
+        acc5_rec.append(acc5.cpu().detach().numpy())
+        loop.set_description(f'GPU [{torch.cuda.memory_allocated(args.gpu)}]')
+        # bottom_feature = []  # clear features
 
     return np.mean(acc1_rec), np.mean(acc5_rec)
-    #print("overall accuracy is {}".format(np.mean(acc_all)))
+
+
+def validate_stitch(botm_model, top_model, stitch_model, test_loader, args, fea_ind, layer_ind, device):
+    with torch.no_grad():
+        botm_model.eval()
+        top_model.eval()
+        stitch_model.eval()
+        # bottom_feature = []
+        # def hook(module, input, output):
+        #     bottom_feature.append(output.detach())
+        #
+        # if args.arch == 'cvgg16_bn':
+        #     get_inner_feature_for_vgg(botm_model, hook, arch='cvgg16_bn')  # get inner feature of the bottom model
+        # elif args.arch == 'cResNet18':
+        #     get_inner_feature_for_resnet(botm_model, hook, arch='cResNet18')
+        acc1_rec, acc5_rec = [], []
+        loop = tqdm.tqdm(enumerate(test_loader), ascii=True, total=len(test_loader))
+        for i, (images, targets) in loop:
+            images, targets = images.to(device), targets.long().to(device)
+            # with torch.no_grad():
+            #     botm_output = botm_model(images)
+            # feature = stitch_model(bottom_feature[fea_ind])
+
+            # >><<
+            botm_feature = botm_model(images, mid_output=layer_ind)
+            feature = stitch_model(botm_feature)
+            # <<>>
+            top_output = top_model(feature, mid_input=layer_ind)
+            acc1, acc5 = accuracy(top_output, targets, topk=(1, 5))
+            acc1_rec.append(acc1.cpu().detach().numpy())
+            acc5_rec.append(acc5.cpu().detach().numpy())
+            # bottom_feature = []  # clear features
+            loop.set_description(f'GPU [{torch.cuda.memory_allocated(args.gpu)}]')
+        return np.mean(acc1_rec), np.mean(acc5_rec)
+
 

@@ -8,7 +8,7 @@ from metric.CKA import get_features, linear_CKA
 from metric.GBS import get_graphs, LSim
 from utils.design_for_hook import get_inner_feature_for_cnn, get_inner_feature_for_resnet, get_inner_feature_for_vgg
 
-
+'''python sanity_check.py --config ./configs/resnet18.yaml --topk 500 --batch-size 500  --data /public/ly/czh/hidden-networks-master/dataset --gpu 4'''
 def sanity_check(args):
     if 'vgg' in args.arch.lower():
         my_seeds = [23, 24, 26, 257, 277, 287, 298, 300, 31, 32]
@@ -24,6 +24,7 @@ def sanity_check(args):
         model = get_pretrained(args, model)
         args.seed = seed
         get_edge(model, data, args)
+
     if args.metric == 'cka':
         features = get_features(args)
     else:
@@ -79,7 +80,8 @@ def get_edge(model, data, args):
             else:
                 get_inner_feature_for_resnet(model, hook, args.arch)
             output = model(images)
-
+            label_check = os.path.join(args.feature_save, "{arch}-N{de}_label.npy".format(arch=args.arch, de=args.batch_size))
+            np.save(label_check, target.cpu().detach().numpy())
             for m in range(len(inter_feature)):
                 if len(inter_feature[m].shape) != 2:
                     if args.metric == 'cka':

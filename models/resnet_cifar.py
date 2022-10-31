@@ -91,36 +91,60 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = self.layer1(out)
-        out = self.layer2(out)
-        out = self.layer3(out)
-        out = self.layer4(out)
-        out = F.avg_pool2d(out, 4)
-        out = self.fc(out)
-        return out.flatten(1)
+    def forward(self, x, mid_input=False, mid_output=False):
+        assert not (mid_input and mid_output)
+        if not mid_input:
+            out0 = F.relu(self.bn1(self.conv1(x)))
+            out1 = self.layer1(out0)
+            out2 = self.layer2(out1)
+            out3 = self.layer3(out2)
+            out4 = self.layer4(out3)
+            out = F.avg_pool2d(out4, 4)
+            out = self.fc(out)
+            if mid_output == 1:
+                return out0
+            elif mid_output == 2:
+                return out1
+            elif mid_output == 3:
+                return out2
+            elif mid_output == 4:
+                return out3
+            return out.flatten(1)
+        else:
+            if mid_input == 1:
+                out = self.layer1(x)
+                out = self.layer2(out)
+                out = self.layer3(out)
+                out = self.layer4(out)
+            elif mid_input == 2:
+                out = self.layer2(x)
+                out = self.layer3(out)
+                out = self.layer4(out)
+            elif mid_input == 3:
+                out = self.layer3(x)
+                out = self.layer4(out)
+            else:
+                out = self.layer4(x)
+            out = F.avg_pool2d(out, 4)
+            out = self.fc(out)
+            return out.flatten(1)
 
 
-def cResNet18():
+def cResNet18(num_classes):
     return ResNet(get_builder(), BasicBlock, [2, 2, 2, 2])
 
-def cResNet18_for_stitch():
-    return ResNet(get_builder(), BasicBlock, [2, 2, 2, 2])
-
-
-def cResNet34():
+def cResNet34(num_classes):
     return ResNet(get_builder(), BasicBlock, [3, 4, 6, 3])
 
 
-def cResNet50():
+def cResNet50(num_classes):
     return ResNet(get_builder(), Bottleneck, [3, 4, 6, 3])
 
 
-def cResNet101():
+def cResNet101(num_classes):
     return ResNet(get_builder(), Bottleneck, [3, 4, 23, 3])
 
 
-def cResNet152():
+def cResNet152(num_classes):
     return ResNet(get_builder(), Bottleneck, [3, 8, 36, 3])
 
